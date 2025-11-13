@@ -79,6 +79,12 @@ let g:ai_edit_stream = 1
 " Language for system messages (default: 'en', options: 'en' or 'ja')
 let g:ai_edit_language = 'en'
 
+" Provider preference for OpenRouter (optional)
+" Specify a preferred provider when using OpenRouter
+" Examples: 'DeepInfra', 'Together', 'OpenAI', 'Anthropic', 'Google'
+" Leave unset for automatic provider selection
+" let g:ai_edit_provider_preferences = 'DeepInfra'
+
 " Custom base URL (optional)
 " let g:ai_edit_base_url = 'https://custom.api.com/v1'
 ```

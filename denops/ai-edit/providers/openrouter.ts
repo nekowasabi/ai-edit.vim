@@ -56,6 +56,11 @@ export class OpenRouterProvider implements LLMProviderInterface {
       stream: this.config.stream !== false, // Default to true
     };
 
+    // Add provider preference if specified
+    if (this.config.provider) {
+      (request as any).provider = { order: [this.config.provider] };
+    }
+
     const url = `${this.baseUrl}/chat/completions`;
 
     try {

@@ -36,6 +36,8 @@ export interface ProviderConfig {
   maxTokens?: number;
   /** Enable streaming response */
   stream?: boolean;
+  /** Provider preference for OpenRouter (e.g., "DeepInfra", "Together", "OpenAI") */
+  provider?: string;
 }
 
 /**

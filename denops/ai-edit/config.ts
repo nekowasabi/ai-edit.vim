@@ -135,6 +135,18 @@ export class ConfigManager {
   }
 
   /**
+   * Get provider preference from Vim variable
+   */
+  async getProviderPreference(): Promise<string | undefined> {
+    try {
+      const provider = await vars.g.get(this.denops, "ai_edit_provider_preferences");
+      return typeof provider === "string" && provider.length > 0 ? provider : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Get language from Vim variable or default
    */
   async getLanguage(): Promise<Language> {
@@ -153,13 +165,14 @@ export class ConfigManager {
    * Get full provider configuration
    */
   async getProviderConfig(): Promise<ProviderConfig> {
-    const [apiKey, model, temperature, maxTokens, stream, baseUrl] = await Promise.all([
+    const [apiKey, model, temperature, maxTokens, stream, baseUrl, provider] = await Promise.all([
       this.getApiKey(),
       this.getModel(),
       this.getTemperature(),
       this.getMaxTokens(),
       this.getStream(),
       this.getBaseUrl(),
+      this.getProviderPreference(),
     ]);
 
     return {
@@ -169,6 +182,7 @@ export class ConfigManager {
       maxTokens,
       stream,
       baseUrl,
+      provider,
     };
   }
 
