@@ -3,7 +3,7 @@
  */
 
 import type { Denops } from "jsr:@denops/std@^8.1.1";
-import type { Language, Message, TextContext } from "./types.ts";
+import type { Language, Message, Position, TextContext } from "./types.ts";
 import { ConfigManager } from "./config.ts";
 import { BufferManager } from "./buffer.ts";
 import { ProviderFactory } from "./providers/factory.ts";
@@ -85,10 +85,22 @@ export class LLMService {
       // Get starting position for insertion
       // Use savedPosition (position when command was executed) if available
       // This ensures async operations insert at the correct location even if cursor moved
-      const insertPosition = context?.selection
-        ? await this.getSelectionEndPosition()
-        : context?.savedPosition ?? context?.cursorPosition ??
+      let insertPosition: Position;
+
+      if (context?.selection && context.selection.length > 0) {
+        // Visual mode with selection: insert after selection
+        insertPosition = await this.getSelectionEndPosition();
+      } else if (context?.savedPosition) {
+        // Normal mode: use saved position (cursor + 1)
+        insertPosition = context.savedPosition;
+      } else {
+        // Fallback: use current cursor position
+        insertPosition = context?.cursorPosition ??
           await this.bufferManager.getCursorPosition();
+      }
+
+      // Reset streaming position for this new request
+      this.bufferManager.resetStreamPosition();
 
       // Process streaming response
       let isFirstChunk = true;

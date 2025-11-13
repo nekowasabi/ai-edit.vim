@@ -160,11 +160,78 @@ Vimコマンド実行 → denops.request() → dispatcher.aiEdit()
 
 @target: `denops/ai-edit/buffer.ts` @ref: なし
 
-- [ ] `insertText()`が既に非同期APIを使用していることを確認
+- [x] `insertText()`が既に非同期APIを使用していることを確認
   - `buffer.append()`は既に非同期対応
-- [ ] `appendStreamChunk()`の動作を確認
+- [x] `appendStreamChunk()`の動作を確認
   - ストリーミング中の挿入が正しく動作することを検証
-- [ ] 変更不要と判断（既に非同期対応済み）
+- [x] 変更不要と判断（既に非同期対応済み）
+
+#### sub2 ストリーミング出力位置のバグ修正（TDD）
+
+@target: `denops/ai-edit/buffer.ts`, `denops/ai-edit/service.ts`
+@ref: `denops/ai-edit/__tests__/buffer_streaming_test.ts`
+
+**問題:** ストリーミング出力の2番目以降のチャンクがバッファの最終行に追加されてしまう
+
+**根本原因:**
+- `appendStreamChunk()`が常にバッファ全体の最終行（`$`）を取得していた
+- 最初の挿入位置を追跡していなかったため、続きのチャンクが間違った場所に挿入された
+
+**実装（TDD）:**
+- [x] Red Phase: 失敗するテストを作成
+  - `buffer_streaming_test.ts` - 5行目で実行した時のストリーミング位置を検証
+  - 最初のチャンクが5行目、2番目が6行目、3番目が7行目に挿入されることを確認
+  - テストは予想通り失敗（2番目以降が最終行に追加されていた）
+- [x] Green Phase: 修正の実装
+  - `BufferManager`に`lastInsertLine`プロパティを追加（挿入位置の追跡）
+  - `insertText()`で最初の挿入位置を記録
+  - `appendStreamChunk()`を修正して、バッファの最終行ではなく最後に挿入した行の続きに追加
+  - `resetStreamPosition()`メソッドを追加（各リクエスト開始時にリセット）
+  - `service.ts`でストリーミング開始前に`resetStreamPosition()`を呼び出し
+- [x] 全テスト成功（37 passed）
+- [x] 型チェック成功（`deno check`）
+
+**結果:**
+- ストリーミング出力が正しい位置（最初の挿入位置から連続）に追加されるようになった
+- 既存のテストにも影響なし
+
+#### sub3 Normal modeでのselection誤検知バグ修正（TDD）
+
+@target: `denops/ai-edit/buffer.ts`
+@ref: `tests/buffer_mode_test.ts`
+
+**問題:** Normal modeで`:AiEdit`を実行すると、前回のVisual selection marksが残っているため、`source: selection`として扱われ、`savedPosition`ではなく`cursorPosition`が使われてしまう
+
+**デバッグログ:**
+```
+[ai-edit DEBUG] Cursor: line 19055, Saved: line 19056
+[ai-edit] Generating response at line 19056...
+[ai-edit DEBUG] insertPosition: line 19055, source: selection  ← 問題！
+```
+
+**根本原因:**
+- `getVisualSelection()`がVimのモードを確認せず、`'<`と`'>`マークの存在のみで判断していた
+- Normal modeでも前回のVisual selectionマークは残り続けるため、誤検知が発生
+- `service.ts:90`の条件`if (context?.selection && context.selection.length > 0)`が常にtrueになる
+
+**実装（TDD）:**
+- [x] Red Phase: 失敗するテストを作成
+  - `buffer_mode_test.ts` - Normal mode、Visual modeでの`getVisualSelection()`の動作を検証
+  - Normal mode（marksあり）: `undefined`を期待 → 実際は文字列が返る（失敗）
+  - Visual mode（marksあり）: 文字列を期待 → 成功
+- [x] Green Phase: 修正の実装
+  - `getVisualSelection()`にモード判定を追加
+  - `fn.mode()`で現在のモードを取得（'v', 'V', '\x16'のいずれか）
+  - Normal mode、Insert modeの場合は即座に`undefined`を返す
+  - Visual mode以外では前回のselection marksを無視
+- [x] 全テスト成功（46 passed）
+  - 既存の全テストもパス
+  - 新規追加の6テストもパス
+
+**結果:**
+- Normal modeで`:AiEdit`を実行時、`source: saved`として正しく`savedPosition`が使用される
+- Visual modeでは引き続き選択範囲が正しく取得される
+- 既存機能に影響なし
 
 ### process6 複数同時実行の制御強化（オプション）
 

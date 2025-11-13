@@ -34,8 +34,12 @@ export class CommandDispatcher {
       const context = await this.bufferManager.getCurrentContext();
 
       // Save the current cursor position for async operations
+      // Insert at the next line of the cursor
       const savedPosition = await this.bufferManager.getCursorPosition();
-      context.savedPosition = savedPosition;
+      context.savedPosition = {
+        line: savedPosition.line + 1,
+        column: savedPosition.column,
+      };
 
       // Automatically handle both normal and visual mode
       // based on whether a selection exists

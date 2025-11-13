@@ -12,6 +12,11 @@ import { BufferError, ErrorCode } from "./errors.ts";
  */
 export class BufferManager {
   private denops: Denops;
+  /**
+   * Track the last insert position for streaming operations
+   * This ensures subsequent chunks are appended to the correct location
+   */
+  private lastInsertLine: number | null = null;
 
   constructor(denops: Denops) {
     this.denops = denops;
@@ -89,6 +94,15 @@ export class BufferManager {
    */
   async getVisualSelection(): Promise<string | undefined> {
     try {
+      // Check current mode - only return selection if in Visual mode
+      const currentMode = await fn.mode(this.denops) as string;
+      const isVisualMode = currentMode === 'v' || currentMode === 'V' || currentMode === '\x16'; // v, V, or Ctrl-V
+
+      // In Normal mode, ignore previous visual selection marks
+      if (!isVisualMode) {
+        return undefined;
+      }
+
       // Validate selection marks
       if (!await this.isVisualSelectionValid()) {
         return undefined;
@@ -177,6 +191,10 @@ export class BufferManager {
       // Insert at exact position (before position.line)
       // This ensures async operations insert at savedPosition even if cursor moved
       await fn.appendbufline(this.denops, bufnr, position.line - 1, lines);
+
+      // Track the last insert position for subsequent streaming chunks
+      // If we inserted N lines, the last line is at position.line + N - 1
+      this.lastInsertLine = position.line + lines.length - 1;
     } catch (error) {
       throw new BufferError(
         "Failed to insert text",
@@ -217,36 +235,49 @@ export class BufferManager {
   }
 
   /**
-   * Append streaming text chunk at the end of buffer
+   * Reset streaming position tracker
+   * Call this at the start of each new streaming operation
+   */
+  resetStreamPosition(): void {
+    this.lastInsertLine = null;
+  }
+
+  /**
+   * Append streaming text chunk after the last inserted position
    */
   async appendStreamChunk(chunk: string): Promise<number> {
     try {
       const bufnr = await fn.bufnr(this.denops, "%") as number;
-      const currentLastLine = await fn.line(this.denops, "$") as number;
 
-      // Get the last line content
-      const lastLineContent = await fn.getline(this.denops, currentLastLine) as string;
+      // Use the tracked insert position, or fall back to buffer end
+      const targetLine = this.lastInsertLine ?? await fn.line(this.denops, "$") as number;
+
+      // Get the target line content
+      const targetLineContent = await fn.getline(this.denops, targetLine) as string;
 
       // Split chunk by newlines
       const chunkLines = chunk.split("\n");
 
       if (chunkLines.length === 1) {
-        // Single line chunk: append to current last line
-        const newContent = lastLineContent + chunkLines[0];
-        await fn.setline(this.denops, currentLastLine, newContent);
+        // Single line chunk: append to target line
+        const newContent = targetLineContent + chunkLines[0];
+        await fn.setline(this.denops, targetLine, newContent);
       } else {
         // Multi-line chunk
-        // Append first chunk to current last line
-        const newContent = lastLineContent + chunkLines[0];
-        await fn.setline(this.denops, currentLastLine, newContent);
+        // Append first chunk to target line
+        const newContent = targetLineContent + chunkLines[0];
+        await fn.setline(this.denops, targetLine, newContent);
 
-        // Append remaining lines
+        // Append remaining lines after target line
         if (chunkLines.length > 1) {
-          await fn.appendbufline(this.denops, bufnr, currentLastLine, chunkLines.slice(1));
+          await fn.appendbufline(this.denops, bufnr, targetLine, chunkLines.slice(1));
         }
       }
 
-      return await fn.line(this.denops, "$") as number;
+      // Update lastInsertLine to point to the last line we just inserted
+      this.lastInsertLine = targetLine + chunkLines.length - 1;
+
+      return this.lastInsertLine;
     } catch (error) {
       throw new BufferError(
         "Failed to append stream chunk",
