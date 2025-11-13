@@ -89,7 +89,7 @@ export class LLMService {
 
       if (context?.selection && context.selection.length > 0) {
         // Visual mode with selection: insert after selection
-        insertPosition = await this.getSelectionEndPosition();
+        insertPosition = await this.getSelectionInsertPosition();
       } else if (context?.savedPosition) {
         // Normal mode: use saved position (cursor + 1)
         insertPosition = context.savedPosition;
@@ -301,11 +301,14 @@ export class LLMService {
   /**
    * Get end position of visual selection
    */
-  private async getSelectionEndPosition() {
+  private async getSelectionInsertPosition() {
     const endPos = await this.denops.call("getpos", "'>") as number[];
     return {
-      line: endPos[1],
-      column: endPos[2],
+      // Insert on the line AFTER the selection ends so the AI response does not
+      // overwrite or precede the highlighted text. `appendbufline` expects the
+      // target line to be the one we are inserting before, so we offset by +1.
+      line: endPos[1] + 1,
+      column: 1,
     };
   }
 
