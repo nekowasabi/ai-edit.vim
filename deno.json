@@ -1,0 +1,37 @@
+{
+  "tasks": {
+    "check": "deno check denops/ai-edit/main.ts",
+    "test": "deno test --allow-env --allow-read --allow-net"
+  },
+  "imports": {
+    "@denops/std": "jsr:@denops/std@^8.1.1",
+    "@denops/std/variable": "jsr:@denops/std@^8.1.1/variable",
+    "@denops/std/buffer": "jsr:@denops/std@^8.1.1/buffer",
+    "@denops/std/function": "jsr:@denops/std@^8.1.1/function",
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/testing": "jsr:@std/testing@^1.0.0"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "fmt": {
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "lint": {
+    "rules": {
+      "include": ["recommended"]
+    }
+  }
+}
