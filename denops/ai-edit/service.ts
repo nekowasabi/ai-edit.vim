@@ -115,14 +115,7 @@ export class LLMService {
           await this.bufferManager.insertText(chunk, insertPosition);
           isFirstChunk = false;
         } else {
-          // For subsequent chunks, join with previous undo block
-          // This allows all chunks to be undone in a single operation
-          try {
-            await this.denops.cmd("undojoin");
-          } catch {
-            // undojoin may fail in some edge cases, but continue streaming
-          }
-          // Append to buffer
+          // For subsequent chunks, BufferManager handles undojoin per write
           await this.bufferManager.appendStreamChunk(chunk);
         }
 

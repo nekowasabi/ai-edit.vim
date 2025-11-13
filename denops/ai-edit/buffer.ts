@@ -262,16 +262,24 @@ export class BufferManager {
       if (chunkLines.length === 1) {
         // Single line chunk: append to target line
         const newContent = targetLineContent + chunkLines[0];
+        await this.undoJoinIfStreaming();
         await fn.setline(this.denops, targetLine, newContent);
       } else {
         // Multi-line chunk
         // Append first chunk to target line
         const newContent = targetLineContent + chunkLines[0];
+        await this.undoJoinIfStreaming();
         await fn.setline(this.denops, targetLine, newContent);
 
         // Append remaining lines after target line
         if (chunkLines.length > 1) {
-          await fn.appendbufline(this.denops, bufnr, targetLine, chunkLines.slice(1));
+          await this.undoJoinIfStreaming();
+          await fn.appendbufline(
+            this.denops,
+            bufnr,
+            targetLine,
+            chunkLines.slice(1),
+          );
         }
       }
 
@@ -381,6 +389,22 @@ export class BufferManager {
         ErrorCode.BUFFER_WRITE_ERROR,
         error,
       );
+    }
+  }
+
+  /**
+   * Attempt to merge the next buffer edit into the existing undo block.
+   * Vim/Neovim raise E790 when undojoin is called without a prior change, so we
+   * only issue it when a streaming operation has already inserted content.
+   */
+  private async undoJoinIfStreaming(): Promise<void> {
+    if (this.lastInsertLine === null) {
+      return;
+    }
+    try {
+      await this.denops.cmd("undojoin");
+    } catch {
+      // ignore undojoin errors (e.g., E790) but continue streaming
     }
   }
 }
