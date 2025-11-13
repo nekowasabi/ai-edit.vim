@@ -90,14 +90,21 @@ export class BufferManager {
   }
 
   /**
-   * Get visual mode selection based on visual selection marks
+   * Get visual selection text using marks
+   *
    * Returns the selected text if valid visual marks ('< and '>) exist,
-   * regardless of the current mode. This allows :AiRewrite to work
-   * correctly even when called from Normal mode after a visual selection.
+   * regardless of the current mode. This is mode-independent because:
+   * - Visual marks persist after leaving Visual mode
+   * - :AiRewrite is executed in Command-line mode (via denops#request())
+   * - The marks are the source of truth, not the current mode
+   *
+   * @returns Selected text if marks are valid, undefined otherwise
    */
   async getVisualSelection(): Promise<string | undefined> {
     try {
-      // Validate selection marks
+      // Validate selection marks first (mode-independent)
+      // This allows :AiRewrite to work correctly even when executed from Command-line mode
+      // after a visual selection (via denops#request())
       if (!await this.isVisualSelectionValid()) {
         return undefined;
       }
