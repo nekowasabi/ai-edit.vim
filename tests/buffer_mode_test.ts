@@ -1,6 +1,7 @@
 /**
- * Tests for BufferManager mode detection
- * This verifies that getVisualSelection() correctly handles Normal vs Visual mode
+ * Tests for BufferManager visual selection validation
+ * This verifies that getVisualSelection() correctly validates visual selection marks
+ * regardless of the current mode
  */
 
 import { assertEquals } from "@std/assert";
@@ -63,17 +64,18 @@ class MockDenops {
   }
 }
 
-Deno.test("getVisualSelection() returns undefined in Normal mode (even with previous marks)", async () => {
-  // Simulate: User was in Visual mode, now in Normal mode with marks still present
+Deno.test("getVisualSelection() returns text when valid marks exist (regardless of mode)", async () => {
+  // After mode check removal: marks are the source of truth
+  // Even in Normal mode, if valid marks exist, return the selection
   const denops = new MockDenops("n", true); // Normal mode with visual marks
   const bufferManager = new BufferManager(denops as Denops);
 
   const selection = await bufferManager.getVisualSelection();
 
   assertEquals(
-    selection,
-    undefined,
-    "Should return undefined in Normal mode, even if visual marks exist from previous selection"
+    typeof selection,
+    "string",
+    "Should return text when valid visual marks exist, regardless of current mode"
   );
 });
 
@@ -130,15 +132,16 @@ Deno.test("getVisualSelection() returns undefined in Normal mode without marks",
   );
 });
 
-Deno.test("getVisualSelection() returns undefined in Insert mode", async () => {
-  const denops = new MockDenops("i", true); // Insert mode (even with marks)
+Deno.test("getVisualSelection() returns text in Insert mode if marks are valid", async () => {
+  // After mode check removal: marks are validated, mode is ignored
+  const denops = new MockDenops("i", true); // Insert mode with valid marks
   const bufferManager = new BufferManager(denops as Denops);
 
   const selection = await bufferManager.getVisualSelection();
 
   assertEquals(
-    selection,
-    undefined,
-    "Should return undefined in Insert mode"
+    typeof selection,
+    "string",
+    "Should return text when valid marks exist, even in Insert mode"
   );
 });

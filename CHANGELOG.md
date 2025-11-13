@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Insert position logic to prioritize `savedPosition` over `cursorPosition` for async operations
 
 ### Fixed
+- **Visual selection mode detection** - Removed incorrect mode check from `getVisualSelection()` that was preventing `:AiRewrite` from working in Visual mode
 - Type safety improved by removing `any` type usage in OpenRouter provider
 - Added `provider` field to `ChatRequest` interface for proper type checking
 

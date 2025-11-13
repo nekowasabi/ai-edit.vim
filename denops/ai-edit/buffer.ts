@@ -90,19 +90,13 @@ export class BufferManager {
   }
 
   /**
-   * Get visual mode selection
+   * Get visual mode selection based on visual selection marks
+   * Returns the selected text if valid visual marks ('< and '>) exist,
+   * regardless of the current mode. This allows :AiRewrite to work
+   * correctly even when called from Normal mode after a visual selection.
    */
   async getVisualSelection(): Promise<string | undefined> {
     try {
-      // Check current mode - only return selection if in Visual mode
-      const currentMode = await fn.mode(this.denops) as string;
-      const isVisualMode = currentMode === 'v' || currentMode === 'V' || currentMode === '\x16'; // v, V, or Ctrl-V
-
-      // In Normal mode, ignore previous visual selection marks
-      if (!isVisualMode) {
-        return undefined;
-      }
-
       // Validate selection marks
       if (!await this.isVisualSelectionValid()) {
         return undefined;

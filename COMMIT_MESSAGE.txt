@@ -1,0 +1,21 @@
+fix(buffer): remove mode check from getVisualSelection
+
+Remove mode check that was preventing :AiRewrite from working
+in Visual mode. The mode check was causing false negatives
+because Vim returns to Normal mode before the denops function
+executes, even with denops#request().
+
+Visual selection marks are still validated by isVisualSelectionValid(),
+which is sufficient for determining if a selection exists.
+
+Fixes the issue where :AiRewrite would show "No text selected"
+error even when text was properly selected in Visual mode.
+
+Changes:
+- Removed fn.mode() call and mode validation in getVisualSelection()
+- Updated JSDoc to clarify mark-based selection behavior
+- Updated buffer_mode_test.ts to reflect new behavior
+- Added :AiRewrite documentation to README.md
+- Updated CHANGELOG.md with fix details
+
+All 52 tests pass, type checking passes.

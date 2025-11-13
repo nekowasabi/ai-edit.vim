@@ -95,7 +95,11 @@ let g:ai_edit_language = 'en'
 
 ## Usage
 
-### Basic Command
+### Commands
+
+The plugin provides two main commands:
+
+#### `:AiEdit` - Insert AI Response
 
 The `:AiEdit` command works in both Normal mode and Visual mode:
 
@@ -131,6 +135,29 @@ When you have a selection, the selected code is automatically used as context fo
 - Cancel requests per-buffer with `:AiEditCancel`
 
 The AI response will be inserted at the cursor position **when the command was executed**, not where your cursor is when the response arrives. This allows for seamless background processing.
+
+#### `:AiRewrite` - Replace Selection with AI Response
+
+The `:AiRewrite` command rewrites the selected text:
+
+**Visual Mode** - Select code and rewrite it:
+
+1. Select code in visual mode (`v`, `V`, or `Ctrl-v`)
+2. Run `:AiRewrite` with your prompt:
+
+```vim
+" Select code first
+V}
+
+" Rewrite the selection
+:AiRewrite translate to English
+:AiRewrite simplify this code
+:AiRewrite fix grammar and style
+```
+
+The selected text will be **replaced** with the AI's response, instead of inserting it below the selection like `:AiEdit` does.
+
+**Note**: `:AiRewrite` requires a visual selection. Visual selection marks (`'<` and `'>`) are used to identify the text to replace, so the command works correctly even when executed from Normal mode after making a selection.
 
 ### Cancel Request
 
