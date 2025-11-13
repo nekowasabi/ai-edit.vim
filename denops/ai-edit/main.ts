@@ -36,8 +36,10 @@ export async function main(denops: Denops): Promise<void> {
   };
 
   // Define Vim commands
+  // Use denops#notify() for async commands (AiEdit, AiRewrite) to avoid blocking Vim
+  // Use denops#request() for AiEditCancel to ensure immediate cancellation
   await denops.cmd(
-    `command! -range -nargs=+ AiEdit call denops#request('${denops.name}', 'aiEdit', [<f-args>])`,
+    `command! -range -nargs=+ AiEdit call denops#notify('${denops.name}', 'aiEdit', [<f-args>])`,
   );
 
   await denops.cmd(
@@ -45,7 +47,7 @@ export async function main(denops: Denops): Promise<void> {
   );
 
   await denops.cmd(
-    `command! -range -nargs=+ AiRewrite call denops#request('${denops.name}', 'aiRewrite', [<f-args>])`,
+    `command! -range -nargs=+ AiRewrite call denops#notify('${denops.name}', 'aiRewrite', [<f-args>])`,
   );
 
   // Log successful initialization

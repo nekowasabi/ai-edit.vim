@@ -185,7 +185,9 @@ export class ErrorHandler {
 
         // Calculate delay with exponential backoff
         const delay = baseDelay * Math.pow(2, attempt);
-        await this.denops.cmd(`echo '[ai-edit] Retry attempt ${attempt + 1}/${maxRetries} in ${delay / 1000}s...'`);
+        await this.denops.cmd(
+          `echo '[ai-edit] Retry attempt ${attempt + 1}/${maxRetries} in ${delay / 1000}s...'`,
+        );
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }

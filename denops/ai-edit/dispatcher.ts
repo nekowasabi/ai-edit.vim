@@ -33,11 +33,17 @@ export class CommandDispatcher {
       // Get context including visual selection (if any)
       const context = await this.bufferManager.getCurrentContext();
 
+      // Save the current cursor position for async operations
+      const savedPosition = await this.bufferManager.getCursorPosition();
+      context.savedPosition = savedPosition;
+
       // Automatically handle both normal and visual mode
       // based on whether a selection exists
       await this.llmService.executePrompt(prompt, context);
     } catch (error) {
-      await denops.cmd(`echo '[ai-edit] Error: ${error instanceof Error ? error.message : "Unknown error"}'`);
+      await denops.cmd(
+        `echo '[ai-edit] Error: ${error instanceof Error ? error.message : "Unknown error"}'`,
+      );
     }
   }
 
@@ -45,7 +51,7 @@ export class CommandDispatcher {
    * Cancel ongoing request
    */
   async aiEditCancel(denops: Denops): Promise<void> {
-    this.llmService.cancelRequest();
+    await this.llmService.cancelRequest();
     await denops.cmd("echo '[ai-edit] Cancelling request...'");
   }
 
@@ -64,10 +70,17 @@ export class CommandDispatcher {
       // Get context including visual selection
       const context = await this.bufferManager.getCurrentContext();
 
+      // Save the cursor position when command was executed
+      // For rewrite, we save the selection start position
+      const savedPosition = await this.bufferManager.getCursorPosition();
+      context.savedPosition = savedPosition;
+
       // Execute rewrite operation
       await this.llmService.executeRewrite(instruction, context);
     } catch (error) {
-      await denops.cmd(`echo '[ai-edit] Error: ${error instanceof Error ? error.message : "Unknown error"}'`);
+      await denops.cmd(
+        `echo '[ai-edit] Error: ${error instanceof Error ? error.message : "Unknown error"}'`,
+      );
     }
   }
 }

@@ -3,7 +3,7 @@
  */
 
 import type { Denops } from "jsr:@denops/std@^8.1.1";
-import type { Message, TextContext, Language } from "./types.ts";
+import type { Language, Message, TextContext } from "./types.ts";
 import { ConfigManager } from "./config.ts";
 import { BufferManager } from "./buffer.ts";
 import { ProviderFactory } from "./providers/factory.ts";
@@ -18,7 +18,8 @@ const SYSTEM_MESSAGES: Record<Language, Record<string, string>> = {
     base: "You are a helpful AI assistant for editing code. The current file type is: {filetype}",
   },
   ja: {
-    base: "あなたはコード編集を支援する有用なAIアシスタントです。現在のファイルタイプは: {filetype}",
+    base:
+      "あなたはコード編集を支援する有用なAIアシスタントです。現在のファイルタイプは: {filetype}",
   },
 };
 
@@ -30,8 +31,16 @@ export class LLMService {
   private configManager: ConfigManager;
   private bufferManager: BufferManager;
   private providerFactory: ProviderFactory;
-  private isProcessing = false;
-  private abortController: AbortController | null = null;
+  /**
+   * Per-buffer processing state for concurrent operations
+   * Maps buffer number to processing status
+   */
+  private processingBuffers = new Map<number, boolean>();
+  /**
+   * Per-buffer abort controllers for granular cancellation
+   * Maps buffer number to its AbortController instance
+   */
+  private abortControllers = new Map<number, AbortController>();
 
   constructor(denops: Denops) {
     this.denops = denops;
@@ -47,17 +56,23 @@ export class LLMService {
    * Execute prompt with LLM
    */
   async executePrompt(prompt: string, context?: TextContext): Promise<void> {
-    if (this.isProcessing) {
-      await this.denops.cmd("echo '[ai-edit] Another request is in progress'");
+    const bufnr = context?.bufferInfo.bufnr ?? await this.denops.call("bufnr", "%") as number;
+
+    // Check if this buffer is already processing
+    if (this.processingBuffers.get(bufnr)) {
+      await this.denops.cmd("echo '[ai-edit] Another request is in progress for this buffer'");
       return;
     }
 
-    this.isProcessing = true;
-    this.abortController = new AbortController();
+    // Mark buffer as processing
+    this.processingBuffers.set(bufnr, true);
+    const abortController = new AbortController();
+    this.abortControllers.set(bufnr, abortController);
 
     try {
-      // Show progress message
-      await this.denops.cmd("echo '[ai-edit] Generating response...'");
+      // Show progress message with position info
+      const line = context?.savedPosition?.line ?? context?.cursorPosition.line;
+      await this.denops.cmd(`echo '[ai-edit] Generating response at line ${line}...'`);
 
       // Build messages
       const messages = await this.buildMessages(prompt, context);
@@ -68,23 +83,23 @@ export class LLMService {
       const provider = this.providerFactory.getProvider(providerName, providerConfig);
 
       // Get starting position for insertion
+      // Use savedPosition (position when command was executed) if available
+      // This ensures async operations insert at the correct location even if cursor moved
       const insertPosition = context?.selection
         ? await this.getSelectionEndPosition()
-        : context?.cursorPosition || await this.bufferManager.getCursorPosition();
-
-      // Insert empty line to start streaming
-      await this.bufferManager.insertText("", insertPosition);
+        : context?.savedPosition ?? context?.cursorPosition ??
+          await this.bufferManager.getCursorPosition();
 
       // Process streaming response
       let isFirstChunk = true;
       for await (const chunk of provider.sendRequest(messages)) {
-        if (this.abortController?.signal.aborted) {
+        if (abortController.signal.aborted) {
           await this.denops.cmd("echo '[ai-edit] Request cancelled'");
           break;
         }
 
         if (isFirstChunk) {
-          // For first chunk, replace the empty line
+          // For first chunk, insert at the saved position
           await this.bufferManager.insertText(chunk, insertPosition);
           isFirstChunk = false;
         } else {
@@ -96,21 +111,29 @@ export class LLMService {
         await this.denops.cmd("redraw");
       }
 
-      await this.denops.cmd("echo '[ai-edit] Response complete'");
+      // Show completion message with position info
+      const completionLine = context?.savedPosition?.line ?? context?.cursorPosition.line;
+      await this.denops.cmd(`echo '[ai-edit] Response inserted at line ${completionLine}'`);
     } catch (error) {
       await this.handleError(error);
     } finally {
-      this.isProcessing = false;
-      this.abortController = null;
+      // Clean up buffer processing state
+      this.processingBuffers.delete(bufnr);
+      this.abortControllers.delete(bufnr);
     }
   }
 
   /**
-   * Cancel ongoing request
+   * Cancel ongoing request for current buffer
    */
-  cancelRequest(): void {
-    if (this.abortController) {
-      this.abortController.abort();
+  async cancelRequest(): Promise<void> {
+    const bufnr = await this.denops.call("bufnr", "%") as number;
+    const abortController = this.abortControllers.get(bufnr);
+
+    if (abortController) {
+      abortController.abort();
+      this.processingBuffers.delete(bufnr);
+      this.abortControllers.delete(bufnr);
     }
   }
 
@@ -118,19 +141,26 @@ export class LLMService {
    * Execute rewrite with LLM and replace selection
    */
   async executeRewrite(instruction: string, context: TextContext): Promise<void> {
-    if (this.isProcessing) {
-      await this.denops.cmd("echo '[ai-edit] Another request is in progress'");
+    const bufnr = context.bufferInfo.bufnr;
+
+    // Check if this buffer is already processing
+    if (this.processingBuffers.get(bufnr)) {
+      await this.denops.cmd("echo '[ai-edit] Another request is in progress for this buffer'");
       return;
     }
 
     // Validate that we have a selection
     if (!context.selection) {
-      await this.denops.cmd("echo '[ai-edit] Error: No text selected. Please select text in visual mode first.'");
+      await this.denops.cmd(
+        "echo '[ai-edit] Error: No text selected. Please select text in visual mode first.'",
+      );
       return;
     }
 
-    this.isProcessing = true;
-    this.abortController = new AbortController();
+    // Mark buffer as processing
+    this.processingBuffers.set(bufnr, true);
+    const abortController = new AbortController();
+    this.abortControllers.set(bufnr, abortController);
 
     try {
       // Show progress message
@@ -147,7 +177,7 @@ export class LLMService {
       // Collect the full response
       let fullResponse = "";
       for await (const chunk of provider.sendRequest(messages)) {
-        if (this.abortController?.signal.aborted) {
+        if (abortController.signal.aborted) {
           await this.denops.cmd("echo '[ai-edit] Request cancelled'");
           return;
         }
@@ -161,8 +191,9 @@ export class LLMService {
     } catch (error) {
       await this.handleError(error);
     } finally {
-      this.isProcessing = false;
-      this.abortController = null;
+      // Clean up buffer processing state
+      this.processingBuffers.delete(bufnr);
+      this.abortControllers.delete(bufnr);
     }
   }
 
@@ -202,7 +233,10 @@ export class LLMService {
   /**
    * Build messages for rewrite operation
    */
-  private async buildRewriteMessages(instruction: string, context: TextContext): Promise<Message[]> {
+  private async buildRewriteMessages(
+    instruction: string,
+    context: TextContext,
+  ): Promise<Message[]> {
     const messages: Message[] = [];
 
     // Add system message
@@ -210,17 +244,21 @@ export class LLMService {
     let systemMessage: string;
 
     if (language === "ja") {
-      systemMessage = "あなたはテキスト書き換えの専門家です。ユーザーが選択したテキストを、指示に従って書き換えてください。";
+      systemMessage =
+        "あなたはテキスト書き換えの専門家です。ユーザーが選択したテキストを、指示に従って書き換えてください。";
       if (context.bufferInfo.filetype && context.bufferInfo.filetype !== "text") {
         systemMessage += `\n現在のファイルタイプ: ${context.bufferInfo.filetype}`;
       }
-      systemMessage += "\n\n重要: 書き換えたテキストのみを出力してください。説明や追加のコメントは不要です。";
+      systemMessage +=
+        "\n\n重要: 書き換えたテキストのみを出力してください。説明や追加のコメントは不要です。";
     } else {
-      systemMessage = "You are a text rewriting specialist. Rewrite the user's selected text according to their instructions.";
+      systemMessage =
+        "You are a text rewriting specialist. Rewrite the user's selected text according to their instructions.";
       if (context.bufferInfo.filetype && context.bufferInfo.filetype !== "text") {
         systemMessage += `\nCurrent file type: ${context.bufferInfo.filetype}`;
       }
-      systemMessage += "\n\nImportant: Output only the rewritten text. No explanations or additional comments needed.";
+      systemMessage +=
+        "\n\nImportant: Output only the rewritten text. No explanations or additional comments needed.";
     }
 
     messages.push({

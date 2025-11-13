@@ -67,7 +67,10 @@ Deno.test("BufferError - create buffer error", () => {
 });
 
 Deno.test("ProviderError - create provider error", () => {
-  const error = new ProviderError("Provider initialization failed", ErrorCode.PROVIDER_INITIALIZATION_ERROR);
+  const error = new ProviderError(
+    "Provider initialization failed",
+    ErrorCode.PROVIDER_INITIALIZATION_ERROR,
+  );
   assertEquals(error.message, "Provider initialization failed");
   assertEquals(error.code, ErrorCode.PROVIDER_INITIALIZATION_ERROR);
   assertEquals(error.name, "ProviderError");

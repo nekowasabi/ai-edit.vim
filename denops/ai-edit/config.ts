@@ -4,8 +4,8 @@
 
 import type { Denops } from "jsr:@denops/std@^8.1.1";
 import * as vars from "jsr:@denops/std@^8.1.1/variable";
-import type { ProviderConfig, Language } from "./types.ts";
-import { ValidationError, ErrorCode } from "./errors.ts";
+import type { Language, ProviderConfig } from "./types.ts";
+import { ErrorCode, ValidationError } from "./errors.ts";
 
 /**
  * Default configuration values

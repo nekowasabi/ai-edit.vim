@@ -1,14 +1,18 @@
 # ai-edit.vim
 
-A Vim/Neovim plugin for AI-powered code editing using LLM providers. Edit code directly in your editor with AI assistance through streaming responses.
+A Vim/Neovim plugin for AI-powered code editing using LLM providers. Edit code directly in your
+editor with AI assistance through streaming responses.
 
 ## Features
 
-- 🤖 **Multiple LLM Providers** - Abstracted provider interface (OpenRouter supported, extensible for others)
+- 🤖 **Multiple LLM Providers** - Abstracted provider interface (OpenRouter supported, extensible
+  for others)
 - ⚡ **Streaming Responses** - Real-time AI responses streamed directly into your buffer
 - 📝 **Visual Mode Support** - Select code and ask AI questions with context
 - 🔧 **Highly Configurable** - Customize API keys, models, temperature, and more
 - 🚀 **Built with Denops** - Fast, async TypeScript implementation for Vim/Neovim
+- ⚡ **Non-Blocking Execution** - Commands run asynchronously without blocking editor operations
+- 🎯 **Multiple Buffer Support** - Work on different buffers simultaneously
 
 ## Requirements
 
@@ -119,6 +123,14 @@ V}
 ```
 
 When you have a selection, the selected code is automatically used as context for the AI.
+
+**⚡ Async Execution** - Commands execute asynchronously, allowing you to:
+- Continue editing while AI processes your request
+- Move cursor to different locations without affecting insertion point
+- Execute commands in multiple buffers simultaneously
+- Cancel requests per-buffer with `:AiEditCancel`
+
+The AI response will be inserted at the cursor position **when the command was executed**, not where your cursor is when the response arrives. This allows for seamless background processing.
 
 ### Cancel Request
 
@@ -306,5 +318,6 @@ Contributions welcome! Please open issues or pull requests.
 
 ## Acknowledgments
 
-- [denops.vim](https://github.com/vim-denops/denops.vim) - Ecosystem for writing Vim/Neovim plugins in TypeScript
+- [denops.vim](https://github.com/vim-denops/denops.vim) - Ecosystem for writing Vim/Neovim plugins
+  in TypeScript
 - [OpenRouter](https://openrouter.ai/) - Unified API for LLM providers

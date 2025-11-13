@@ -49,6 +49,9 @@ export interface ChatRequest {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  provider?: {
+    order?: string[];
+  };
 }
 
 /**
@@ -92,12 +95,26 @@ export interface BufferInfo {
 
 /**
  * Text context for LLM request
+ *
+ * This interface provides context about the buffer and cursor positions
+ * when an AI command is executed. The `savedPosition` field enables
+ * async command execution by preserving the original insertion point.
  */
 export interface TextContext {
   /** Selected text (if in visual mode) */
   selection?: string;
-  /** Current cursor position */
+  /** Current cursor position at the time of context capture */
   cursorPosition: Position;
+  /**
+   * Saved position when command was executed (for async operations)
+   *
+   * When commands execute asynchronously via denops#notify(), the cursor
+   * may move before the API response arrives. This field preserves the
+   * original position so responses can be inserted at the correct location.
+   *
+   * Pattern learned from: Parrot.nvim's vim.schedule_wrap() approach
+   */
+  savedPosition?: Position;
   /** Buffer information */
   bufferInfo: BufferInfo;
 }

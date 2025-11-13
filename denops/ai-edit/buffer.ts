@@ -3,7 +3,6 @@
  */
 
 import type { Denops } from "jsr:@denops/std@^8.1.1";
-import * as buffer from "jsr:@denops/std@^8.1.1/buffer";
 import * as fn from "jsr:@denops/std@^8.1.1/function";
 import type { BufferInfo, Position, TextContext } from "./types.ts";
 import { BufferError, ErrorCode } from "./errors.ts";
@@ -175,11 +174,9 @@ export class BufferManager {
       const lines = text.split("\n");
       const bufnr = await fn.bufnr(this.denops, "%") as number;
 
-      // Set cursor to target position
-      await fn.cursor(this.denops, position.line, position.column);
-
-      // Append lines after current line
-      await buffer.append(this.denops, bufnr, lines);
+      // Insert at exact position (before position.line)
+      // This ensures async operations insert at savedPosition even if cursor moved
+      await fn.appendbufline(this.denops, bufnr, position.line - 1, lines);
     } catch (error) {
       throw new BufferError(
         "Failed to insert text",

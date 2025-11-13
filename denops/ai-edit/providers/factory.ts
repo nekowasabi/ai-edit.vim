@@ -3,7 +3,7 @@
  */
 
 import type { LLMProviderConstructor, LLMProviderInterface, ProviderConfig } from "../types.ts";
-import { ProviderError, ErrorCode } from "../errors.ts";
+import { ErrorCode, ProviderError } from "../errors.ts";
 
 /**
  * Provider factory for creating LLM provider instances

@@ -3,7 +3,7 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import type { Message, ProviderConfig, ChatRequest, TextContext } from "../denops/ai-edit/types.ts";
+import type { ChatRequest, Message, ProviderConfig, TextContext } from "../denops/ai-edit/types.ts";
 
 Deno.test("Message type - create valid message", () => {
   const message: Message = {
