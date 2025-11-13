@@ -48,4 +48,26 @@ export class CommandDispatcher {
     this.llmService.cancelRequest();
     await denops.cmd("echo '[ai-edit] Cancelling request...'");
   }
+
+  /**
+   * Handle :AiRewrite command (visual mode only)
+   */
+  async aiRewrite(denops: Denops, args: string[]): Promise<void> {
+    const instruction = args.join(" ").trim();
+
+    if (!instruction) {
+      await denops.cmd("echo '[ai-edit] Error: Instruction is required'");
+      return;
+    }
+
+    try {
+      // Get context including visual selection
+      const context = await this.bufferManager.getCurrentContext();
+
+      // Execute rewrite operation
+      await this.llmService.executeRewrite(instruction, context);
+    } catch (error) {
+      await denops.cmd(`echo '[ai-edit] Error: ${error instanceof Error ? error.message : "Unknown error"}'`);
+    }
+  }
 }

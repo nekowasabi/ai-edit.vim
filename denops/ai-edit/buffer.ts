@@ -258,4 +258,100 @@ export class BufferManager {
       );
     }
   }
+
+  /**
+   * Replace visual selection with new text
+   */
+  async replaceSelection(newText: string): Promise<void> {
+    try {
+      // Validate selection marks
+      if (!await this.isVisualSelectionValid()) {
+        throw new BufferError(
+          "No valid selection found",
+          ErrorCode.BUFFER_READ_ERROR,
+        );
+      }
+
+      // Get visual selection marks
+      const startPos = await fn.getpos(this.denops, "'<") as number[];
+      const endPos = await fn.getpos(this.denops, "'>") as number[];
+
+      const startLine = startPos[1];
+      const endLine = endPos[1];
+      const startCol = startPos[2];
+      const endCol = endPos[2];
+
+      const bufnr = await fn.bufnr(this.denops, "%") as number;
+
+      // Split new text into lines
+      const newLines = newText.split("\n");
+
+      // Get the lines in the selection range
+      const lines = await fn.getline(this.denops, startLine, endLine) as string | string[];
+      const selectedLines = Array.isArray(lines) ? lines : [lines];
+
+      if (selectedLines.length === 0) {
+        throw new BufferError(
+          "Failed to get selection lines",
+          ErrorCode.BUFFER_READ_ERROR,
+        );
+      }
+
+      // Build replacement lines
+      const replacementLines: string[] = [];
+
+      if (selectedLines.length === 1) {
+        // Single line selection
+        const prefix = selectedLines[0].substring(0, startCol - 1);
+        const suffix = selectedLines[0].substring(endCol);
+
+        if (newLines.length === 1) {
+          // Single line replacement
+          replacementLines.push(prefix + newLines[0] + suffix);
+        } else {
+          // Multi-line replacement
+          replacementLines.push(prefix + newLines[0]);
+          for (let i = 1; i < newLines.length - 1; i++) {
+            replacementLines.push(newLines[i]);
+          }
+          replacementLines.push(newLines[newLines.length - 1] + suffix);
+        }
+      } else {
+        // Multi-line selection
+        const firstLinePrefix = selectedLines[0].substring(0, startCol - 1);
+        const lastLineSuffix = selectedLines[selectedLines.length - 1].substring(endCol);
+
+        if (newLines.length === 1) {
+          // Replace with single line
+          replacementLines.push(firstLinePrefix + newLines[0] + lastLineSuffix);
+        } else {
+          // Replace with multiple lines
+          replacementLines.push(firstLinePrefix + newLines[0]);
+          for (let i = 1; i < newLines.length - 1; i++) {
+            replacementLines.push(newLines[i]);
+          }
+          replacementLines.push(newLines[newLines.length - 1] + lastLineSuffix);
+        }
+      }
+
+      // Delete original lines (except the first one)
+      if (endLine > startLine) {
+        await fn.deletebufline(this.denops, bufnr, startLine + 1, endLine);
+      }
+
+      // Replace the first line
+      await fn.setbufline(this.denops, bufnr, startLine, replacementLines[0]);
+
+      // Append remaining lines if any
+      if (replacementLines.length > 1) {
+        await fn.appendbufline(this.denops, bufnr, startLine, replacementLines.slice(1));
+      }
+    } catch (error) {
+      throw new BufferError(
+        "Failed to replace selection",
+        ErrorCode.BUFFER_WRITE_ERROR,
+        error,
+      );
+    }
+  }
 }

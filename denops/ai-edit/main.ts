@@ -26,6 +26,13 @@ export async function main(denops: Denops): Promise<void> {
     async aiEditCancel(): Promise<void> {
       await dispatcher.aiEditCancel(denops);
     },
+
+    /**
+     * Execute AI rewrite command (visual mode only)
+     */
+    async aiRewrite(...args: unknown[]): Promise<void> {
+      await dispatcher.aiRewrite(denops, args as string[]);
+    },
   };
 
   // Define Vim commands
@@ -35,6 +42,10 @@ export async function main(denops: Denops): Promise<void> {
 
   await denops.cmd(
     `command! AiEditCancel call denops#request('${denops.name}', 'aiEditCancel', [])`,
+  );
+
+  await denops.cmd(
+    `command! -range -nargs=+ AiRewrite call denops#request('${denops.name}', 'aiRewrite', [<f-args>])`,
   );
 
   // Log successful initialization
