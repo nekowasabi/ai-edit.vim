@@ -70,9 +70,7 @@ function! s:register_plugin() abort
 endfunction
 
 function! s:check_plugin_loaded() abort
-  if denops#plugin#is_loaded('ai-edit')
-    echom '[ai-edit] Plugin loaded successfully. Commands are ready to use.'
-  else
+  if !denops#plugin#is_loaded('ai-edit')
     echohl WarningMsg
     echomsg '[ai-edit] Plugin failed to load'
     echohl None
