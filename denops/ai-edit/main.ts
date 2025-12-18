@@ -51,6 +51,4 @@ export async function main(denops: Denops): Promise<void> {
     `command! -range -nargs=+ AiRewrite call denops#request('${denops.name}', 'aiRewrite', [<f-args>])`,
   );
 
-  // Log successful initialization
-  console.log("ai-edit.vim plugin loaded successfully");
 }
