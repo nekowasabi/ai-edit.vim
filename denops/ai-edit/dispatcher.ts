@@ -87,4 +87,29 @@ export class CommandDispatcher {
       );
     }
   }
+
+
+  /**
+   * Handle AiEditOutput() function call
+   * Returns AI response as string without modifying the buffer
+   */
+  async aiEditOutput(_denops: Denops, args: string[]): Promise<string> {
+    const prompt = args.join(" ").trim();
+
+    // Return empty string for empty prompt
+    if (!prompt) {
+      return "";
+    }
+
+    try {
+      // Get context including visual selection (if any)
+      const context = await this.bufferManager.getCurrentContext();
+
+      // Execute output operation (returns string, no buffer modification)
+      return await this.llmService.executeOutput(prompt, context);
+    } catch (_error) {
+      // Return empty string on error
+      return "";
+    }
+  }
 }

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`AiEditOutput()` function** - New VimScript function that returns AI response as a string without modifying the buffer, enabling programmatic AI usage in scripts
+  - Returns AI response as string (not void)
+  - Does NOT modify buffer (unlike `:AiEdit` and `:AiRewrite`)
+  - Supports optional visual selection as context
+  - Uses synchronous execution (`denops#request()`) for immediate return value
+  - Returns empty string on error or empty prompt
 - **Non-blocking async command execution** - `:AiEdit` and `:AiRewrite` commands now execute asynchronously using `denops#notify()`, allowing continued editor use during API calls
 - **Cursor position preservation** - AI responses are inserted at the command execution position, even if cursor moves during processing
 - **Buffer-level execution control** - Multiple buffers can process AI requests simultaneously without blocking each other

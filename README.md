@@ -97,7 +97,7 @@ let g:ai_edit_language = 'en'
 
 ### Commands
 
-The plugin provides two main commands:
+The plugin provides three main commands and a VimScript function:
 
 #### `:AiEdit` - Insert AI Response
 
@@ -158,6 +158,52 @@ V}
 The selected text will be **replaced** with the AI's response, instead of inserting it below the selection like `:AiEdit` does.
 
 **Note**: `:AiRewrite` requires a visual selection. Visual selection marks (`'<` and `'>`) are used to identify the text to replace, so the command works correctly even when executed from Normal mode after making a selection.
+
+#### `AiEditOutput()` - Get AI Response as String
+
+The `AiEditOutput()` function returns the AI response as a string without modifying the buffer. This is useful for programmatic AI usage in VimScript.
+
+**Basic Usage**:
+
+```vim
+" Get AI response and store in a variable
+let g:result = AiEditOutput('translate to Japanese')
+
+" Use the result programmatically
+if !empty(g:result)
+  echo g:result
+endif
+```
+
+**With Visual Selection**:
+
+```vim
+" Select text first, then get AI response
+V}
+let g:translation = AiEditOutput('translate this to English')
+```
+
+**Use Cases**:
+
+```vim
+" Generate commit message
+let g:message = AiEditOutput('generate a commit message for this diff')
+
+" Summarize selected text
+let g:summary = AiEditOutput('summarize in one sentence')
+
+" Convert format
+let g:json = AiEditOutput('convert to JSON format')
+```
+
+**Key Differences from `:AiEdit` and `:AiRewrite`**:
+
+| Feature | `:AiEdit` | `:AiRewrite` | `AiEditOutput()` |
+|---------|-----------|--------------|------------------|
+| Modifies buffer | Yes | Yes | No |
+| Return value | None | None | String |
+| Execution | Async | Sync | Sync |
+| Use case | Insert content | Replace selection | Programmatic use |
 
 ### Cancel Request
 

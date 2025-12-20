@@ -210,6 +210,55 @@ export class LLMService {
   }
 
   /**
+   * Execute output with LLM and return the response as string
+   * Unlike executePrompt/executeRewrite, this method does NOT modify the buffer
+   * @param prompt - The prompt to send to the LLM
+   * @param context - Text context including optional selection
+   * @returns The LLM response as a string, or empty string on error
+   */
+  async executeOutput(prompt: string, context: TextContext): Promise<string> {
+    const bufnr = context.bufferInfo.bufnr;
+
+    // Check if this buffer is already processing
+    if (this.processingBuffers.get(bufnr)) {
+      return "";
+    }
+
+    // Mark buffer as processing
+    this.processingBuffers.set(bufnr, true);
+    const abortController = new AbortController();
+    this.abortControllers.set(bufnr, abortController);
+
+    try {
+      // Build messages
+      const messages = await this.buildMessages(prompt, context);
+
+      // Get provider config and create provider
+      const providerConfig = await this.configManager.getProviderConfig();
+      const providerName = await this.configManager.getProvider();
+      const provider = this.providerFactory.getProvider(providerName, providerConfig);
+
+      // Collect the full response (no streaming to buffer)
+      let fullResponse = "";
+      for await (const chunk of provider.sendRequest(messages)) {
+        if (abortController.signal.aborted) {
+          return "";
+        }
+        fullResponse += chunk;
+      }
+
+      return fullResponse;
+    } catch (_error) {
+      // Return empty string on error
+      return "";
+    } finally {
+      // Clean up buffer processing state
+      this.processingBuffers.delete(bufnr);
+      this.abortControllers.delete(bufnr);
+    }
+  }
+
+  /**
    * Build messages from prompt and context
    */
   private async buildMessages(prompt: string, context?: TextContext): Promise<Message[]> {

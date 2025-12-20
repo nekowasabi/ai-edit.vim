@@ -76,3 +76,12 @@ function! s:check_plugin_loaded() abort
     echohl None
   endif
 endfunction
+
+" Returns AI response for selection without modifying buffer
+" Usage: let g:result = AiEditOutput('translate to Japanese')
+function! AiEditOutput(...) abort
+  if !denops#plugin#is_loaded('ai-edit')
+    return ''
+  endif
+  return denops#request('ai-edit', 'aiEditOutput', a:000)
+endfunction

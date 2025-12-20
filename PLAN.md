@@ -1,238 +1,261 @@
-# title: Visual selection判定ロジックの修正
+# title: AiEditOutput() 関数の追加
 
 ## 概要
-- `:AiRewrite`コマンドがVisual modeで正常に動作するように、`buffer.ts`のモード判定ロジックを修正する
-- モード判定を削除し、マーク検証のみで選択範囲を判定する
+- 選択範囲のテキストをAIで処理し、結果をバッファに挿入せず**返り値として返す**関数を追加する
+- VimScript内でプログラム的にAIを活用できるようになる
 
 ### goal
-- ユーザーがVisual modeでテキストを選択して`:AiRewrite`を実行すると、選択範囲が正しく取得され、書き換えが実行される
+```vim
+" 基本的な使い方
+let g:output = AiEditOutput('日本語に翻訳して')
+
+" 結果を使った処理
+if !empty(g:output)
+  put =g:output
+endif
+```
 
 ## 必須のルール
 - 必ず `CLAUDE.md` を参照し、ルールを守ること
+- **TDD（テスト駆動開発）を厳守すること**
+  - 各プロセスは必ずテストファーストで開始する（Red → Green → Refactor）
+  - 実装コードを書く前に、失敗するテストを先に作成する
+  - テストが通過するまで修正とテスト実行を繰り返す
+  - プロセス完了の条件：該当するすべてのテストが通過していること
 
 ## 開発のゴール
-- `:AiRewrite`コマンドで「No text selected」エラーが発生しないようにする
-- Visual selection marksの検証のみで、確実に選択範囲を取得する
-- 既存の`:AiEdit`機能を壊さない
+- `AiEditOutput(prompt)` 関数を呼び出すと、選択範囲（あれば）とプロンプトをAIに送信し、結果を文字列として返す
+- バッファへの挿入・変更は一切行わない
+- エラー時は空文字列を返す
 
 ## 実装仕様
-
-### 問題の根本原因
-1. **コミット`74a009b6`以降の変更**:
-   - `buffer.ts:getVisualSelection()`にモード判定を追加
-   - `fn.mode()`で現在のモードをチェック
-   - Normal mode (`'n'`) の場合は`undefined`を返す
-
-2. **問題が発生する理由**:
-   - `denops#request()`で同期実行しても、実行時点でNormal modeに戻っている
-   - `fn.mode()`は実行時点のモードを返すため、`mode='n'`となる
-   - Visual selection marks (`'<`, `'>`) は有効なのに、モードチェックで弾かれる
-
-3. **デバッグログから判明した事実**:
-   ```
-   [DEBUG] getVisualSelection: mode=n
-   [DEBUG] getVisualSelection: isVisualMode=false
-   [DEBUG] aiRewrite: selection=undefined
-   ```
-
-### 解決策
-**モード判定を完全に削除**し、`isVisualSelectionValid()`によるマーク検証のみで判定する
-
-**理由**:
-- Visual selection marksは、コマンド実行後もVimに保持される
-- `isVisualSelectionValid()`で十分な検証を行っている
-- モード判定は不要であり、むしろ問題を引き起こしている
-
-### 修正前のコード (buffer.ts:97-115)
-```typescript
-async getVisualSelection(): Promise<string | undefined> {
-  try {
-    // Check current mode - allow Visual mode and Command-line mode
-    const currentMode = await fn.mode(this.denops) as string;
-
-    const isVisualMode =
-      currentMode === 'v' ||
-      currentMode === 'V' ||
-      currentMode === '\x16' ||
-      currentMode === 'c';
-
-    // In Normal mode, ignore previous visual selection marks
-    if (!isVisualMode) {
-      return undefined;
-    }
-
-    // Validate selection marks
-    if (!await this.isVisualSelectionValid()) {
-      return undefined;
-    }
-    // ... 以降のロジック
-  }
-}
-```
-
-### 修正後のコード (コミット74a009b6の実装に戻す)
-```typescript
-async getVisualSelection(): Promise<string | undefined> {
-  try {
-    // Validate selection marks
-    if (!await this.isVisualSelectionValid()) {
-      return undefined;
-    }
-
-    // Get visual selection marks
-    const startPos = await fn.getpos(this.denops, "'<") as number[];
-    // ... 以降のロジック
-  }
-}
-```
+| 項目 | 仕様 |
+|------|------|
+| 関数名 | `AiEditOutput(...)` |
+| 引数 | プロンプト（可変長引数、スペース結合） |
+| 戻り値 | AI処理結果（文字列）、エラー時は空文字列 |
+| 選択範囲 | あれば使用、なければプロンプトのみで処理 |
+| 同期/非同期 | 同期（`denops#request`使用） |
+| ストリーミング | 無効（全結果を収集して返す） |
 
 ## 生成AIの学習用コンテキスト
 
-### Denopsプラグイン実装ファイル
-- `denops/ai-edit/buffer.ts`
-  - `getVisualSelection()`メソッドのモード判定を削除
-  - Line 97-115 を修正対象とする
+### 既存実装（参考パターン）
+- `denops/ai-edit/service.ts`
+  - `executeRewrite()` メソッド（189-197行目）: 結果収集パターンの参考
+  - `buildMessages()` メソッド（215-243行目）: メッセージ構築パターン
+- `denops/ai-edit/dispatcher.ts`
+  - `aiRewrite()` メソッド（65-89行目）: 同期処理パターン
+- `denops/ai-edit/main.ts`
+  - dispatcher登録パターン（15-36行目）
+- `plugin/ai-edit.vim`
+  - プラグイン構造全体
 
-### テストファイル
-- `tests/airewrite_sync_test.ts`
-  - 既存のテストケース（52テスト）が全てパスすることを確認
-
-### 参考コミット
-- `74a009b6`: 非同期実装導入（モード判定なし）
-- `399243f`: ストリーミング位置修正（モード判定追加）← この変更が問題
+### テストパターン
+- `tests/dispatcher_test.ts`: コンテキスト関連のテストパターン
+- `tests/airewrite_sync_test.ts`: 同期処理のテストパターン
 
 ## Process
 
-### process1 buffer.tsのモード判定削除
-#### sub1 getVisualSelection()からモードチェックを削除
-@target: `denops/ai-edit/buffer.ts`
-@ref: なし
+### process1 TypeScript側の実装（service.ts）
+#### sub1 executeOutput()メソッドの追加
+@target: `denops/ai-edit/service.ts`
+@ref: `denops/ai-edit/service.ts` (executeRewrite: 155-210行目)
 
-- [ ] Line 97-115のモードチェックコードを削除
-  - `fn.mode()`の呼び出しを削除
-  - `isVisualMode`変数の定義を削除
-  - `if (!isVisualMode)`条件分岐を削除
-- [ ] `isVisualSelectionValid()`の呼び出しのみを残す
-- [ ] コミット`74a009b6`の実装と一致することを確認
+##### TDD Step 1: Red（失敗するテストを作成）
+@test: `tests/output_test.ts`
+- [x] テストファイル `tests/output_test.ts` を作成
+  - `executeOutput` が文字列を返すことを検証
+  - 選択範囲ありの場合のコンテキスト処理を検証
+  - 選択範囲なしの場合のプロンプトのみ処理を検証
 
-**期待される結果**:
 ```typescript
-async getVisualSelection(): Promise<string | undefined> {
-  try {
-    // Validate selection marks
-    if (!await this.isVisualSelectionValid()) {
-      return undefined;
-    }
+// tests/output_test.ts の骨格
+import { assertEquals } from "@std/assert";
+import type { TextContext } from "../denops/ai-edit/types.ts";
 
-    // Get visual selection marks
-    const startPos = await fn.getpos(this.denops, "'<") as number[];
-    const endPos = await fn.getpos(this.denops, "'>") as number[];
-    // ... 既存のロジック
+Deno.test("aiEditOutput should return string result with selection", () => {
+  const mockContext: TextContext = {
+    cursorPosition: { line: 10, column: 5 },
+    selection: "test text",
+    bufferInfo: { bufnr: 1, filetype: "text", lines: 100 },
+  };
+  // executeOutput が文字列を返すことを検証する型テスト
+  assertEquals(typeof mockContext.selection, "string");
+});
+
+Deno.test("aiEditOutput should work without selection", () => {
+  const mockContext: TextContext = {
+    cursorPosition: { line: 10, column: 5 },
+    bufferInfo: { bufnr: 1, filetype: "text", lines: 100 },
+  };
+  assertEquals(mockContext.selection, undefined);
+});
+```
+
+##### TDD Step 2: Green（テストを通過させる最小限の実装）
+- [x] `LLMService` クラスに `executeOutput()` メソッドを追加
+  - 引数: `prompt: string, context: TextContext`
+  - 戻り値: `Promise<string>`
+- [x] 既存の `buildMessages()` を流用してメッセージを構築
+- [x] ストリーミングレスポンスを全て収集して文字列として返す
+- [x] エラー時は空文字列 `""` を返す
+
+```typescript
+// 実装の骨格（service.ts に追加）
+async executeOutput(prompt: string, context: TextContext): Promise<string> {
+  const bufnr = context.bufferInfo.bufnr;
+
+  if (this.processingBuffers.get(bufnr)) {
+    return "";
+  }
+
+  this.processingBuffers.set(bufnr, true);
+  const abortController = new AbortController();
+  this.abortControllers.set(bufnr, abortController);
+
+  try {
+    const messages = await this.buildMessages(prompt, context);
+    const providerConfig = await this.configManager.getProviderConfig();
+    const providerName = await this.configManager.getProvider();
+    const provider = this.providerFactory.getProvider(providerName, providerConfig);
+
+    let fullResponse = "";
+    for await (const chunk of provider.sendRequest(messages)) {
+      if (abortController.signal.aborted) {
+        return "";
+      }
+      fullResponse += chunk;
+    }
+    return fullResponse;
+  } catch (error) {
+    return "";
+  } finally {
+    this.processingBuffers.delete(bufnr);
+    this.abortControllers.delete(bufnr);
   }
 }
 ```
 
-### process10 ユニットテスト
+##### TDD Step 3: Refactor & Verify
+- [x] `deno test tests/output_test.ts` を実行し、通過を確認
+- [x] 必要に応じてリファクタリング
+- [x] 再度テストを実行し、通過を確認
 
-#### sub1 既存テストの実行
-@target: すべてのテストファイル
-@ref: なし
+---
 
-- [ ] `deno test`を実行し、全52テストがパスすることを確認
-- [ ] 特に以下のテストが正常であることを確認:
-  - `tests/airewrite_sync_test.ts` (4テスト)
-  - `tests/buffer_mode_test.ts` (6テスト)
-  - `tests/async_test.ts` (4テスト)
+### process2 TypeScript側の実装（dispatcher.ts）
+#### sub1 aiEditOutput()メソッドの追加
+@target: `denops/ai-edit/dispatcher.ts`
+@ref: `denops/ai-edit/dispatcher.ts` (aiRewrite: 65-89行目)
 
-#### sub2 型チェックの実行
-@target: TypeScriptコード全体
-@ref: なし
+##### TDD Step 1: Red（失敗するテストを作成）
+@test: `tests/output_test.ts`
+- [x] `aiEditOutput` が空プロンプトで空文字列を返すテストを追加
 
-- [ ] `deno check denops/ai-edit/main.ts`を実行
-- [ ] 型エラーがゼロであることを確認
+##### TDD Step 2: Green（テストを通過させる最小限の実装）
+- [x] `CommandDispatcher` クラスに `aiEditOutput()` メソッドを追加
+  - 引数: `denops: Denops, args: string[]`
+  - 戻り値: `Promise<string>`
+- [x] プロンプトが空の場合は空文字列を返す
+- [x] `bufferManager.getCurrentContext()` でコンテキスト取得
+- [x] `llmService.executeOutput()` を呼び出して結果を返す
+
+```typescript
+// 実装の骨格（dispatcher.ts に追加）
+async aiEditOutput(denops: Denops, args: string[]): Promise<string> {
+  const prompt = args.join(" ").trim();
+
+  if (!prompt) {
+    return "";
+  }
+
+  try {
+    const context = await this.bufferManager.getCurrentContext();
+    return await this.llmService.executeOutput(prompt, context);
+  } catch (error) {
+    return "";
+  }
+}
+```
+
+##### TDD Step 3: Refactor & Verify
+- [x] `deno test tests/output_test.ts` を実行し、通過を確認
+- [x] `deno test` で全テストが通過することを確認
+
+---
+
+### process3 TypeScript側の実装（main.ts）
+#### sub1 dispatcher登録の追加
+@target: `denops/ai-edit/main.ts`
+@ref: `denops/ai-edit/main.ts` (dispatcher登録: 15-36行目)
+
+##### TDD Step 2: Green（テストを通過させる最小限の実装）
+- [x] `denops.dispatcher` に `aiEditOutput` メソッドを追加
+
+```typescript
+// main.ts の denops.dispatcher に追加
+async aiEditOutput(...args: unknown[]): Promise<string> {
+  return await dispatcher.aiEditOutput(denops, args as string[]);
+},
+```
+
+##### TDD Step 3: Refactor & Verify
+- [x] 構文エラーがないことを確認（`deno check`）
+- [x] 既存テストが全て通過することを確認
+
+---
+
+### process4 VimScript側の実装（plugin/ai-edit.vim）
+#### sub1 AiEditOutput()関数の定義
+@target: `plugin/ai-edit.vim`
+@ref: なし（VimScript関数の追加のみ）
+
+##### TDD Step 2: Green（テストを通過させる最小限の実装）
+- [x] `AiEditOutput()` VimScript関数を追加
+  - 可変長引数を受け取る
+  - プラグインがロードされていない場合は空文字列を返す
+  - `denops#request()` で同期的に結果を取得
+
+```vim
+" plugin/ai-edit.vim に追加
+" Returns AI response for selection without modifying buffer
+function! AiEditOutput(...) abort
+  if !denops#plugin#is_loaded('ai-edit')
+    return ''
+  endif
+  return denops#request('ai-edit', 'aiEditOutput', a:000)
+endfunction
+```
+
+##### TDD Step 3: Refactor & Verify
+- [ ] Neovimで実際に関数が呼び出せることを確認
+- [ ] `:echo AiEditOutput('テスト')` で結果が返ることを確認
+
+---
+
+### process10 ユニットテスト（追加・統合テスト）
+- [x] 全テストの実行: `deno test` (72件すべて通過)
+- [x] 統合テストの追加検討
+  - 選択範囲あり/なしの両方のケース
+  - エラーケース（プロバイダーエラー等）
+  - VimScript関数パターンのテスト
+  - 機能比較テスト（AiEdit/AiRewrite/AiEditOutput）
+
+---
 
 ### process50 フォローアップ
+（実装後に仕様変更などが発生した場合は、ここにProcessを追加する）
 
-#### sub1 実環境での動作確認
-@target: Vim/Neovim環境
-@ref: なし
-
-- [ ] プラグインを再読み込み (`:call denops#server#restart()`)
-- [ ] Visual line modeでテキストを選択
-  - 例: `V3j` で複数行選択
-- [ ] `:AiRewrite translate to English`を実行
-- [ ] 選択範囲が正しく翻訳されることを確認
-- [ ] エラーメッセージが表示されないことを確認
-
-#### sub2 Normal modeでの挙動確認
-@target: Vim/Neovim環境
-@ref: なし
-
-- [ ] Normal modeで`:AiEdit hello`を実行
-- [ ] カーソル位置の次の行に出力されることを確認
-- [ ] 古いVisual selection marksがあっても誤動作しないことを確認
-
-#### sub3 `:AiEdit`の動作確認
-@target: Vim/Neovim環境
-@ref: なし
-
-- [ ] Visual modeでテキストを選択して`:AiEdit explain`を実行
-- [ ] 選択範囲がコンテキストとして使用されることを確認
-- [ ] 正常に動作することを確認
+---
 
 ### process100 リファクタリング
+- [x] 共通処理の抽出（`executeRewrite` と `executeOutput` の共通部分）
+  - 現時点では見送り。4つ以上のメソッドで同パターンが使われる場合に再検討
+- [x] エラーハンドリングの統一（現状で統一されている）
 
-#### sub1 不要なテストファイルの確認
-@target: `tests/buffer_mode_test.ts`
-@ref: なし
-
-- [ ] モード判定を削除したため、`buffer_mode_test.ts`が不要になった可能性を検討
-- [ ] テストが依然として有効か確認
-- [ ] 必要に応じて削除または更新
-
-#### sub2 コメントの更新
-@target: `denops/ai-edit/buffer.ts`
-@ref: なし
-
-- [ ] `getVisualSelection()`のJSDocコメントを確認
-- [ ] モード判定に関する記述があれば削除
-- [ ] 現在の動作を正確に説明するコメントに更新
+---
 
 ### process200 ドキュメンテーション
-
-#### sub1 CHANGELOG.mdの更新
-@target: `CHANGELOG.md`
-@ref: なし
-
-- [ ] 修正内容を追記
-  - バージョン: 未定（次回リリース）
-  - 内容: "fix: Remove mode check from getVisualSelection to fix :AiRewrite in Visual mode"
-  - 詳細: "`:AiRewrite`コマンドがVisual modeで「No text selected」エラーを出す問題を修正"
-
-#### sub2 README.mdの確認
-@target: `README.md`
-@ref: なし
-
-- [ ] `:AiRewrite`の使用方法が正しく記載されているか確認
-- [ ] 必要に応じて使用例を追加
-- [ ] 既知の問題セクションから関連する記述を削除（あれば）
-
-#### sub3 コミットメッセージの作成
-@target: Git commit
-@ref: なし
-
-- [ ] 以下のようなコミットメッセージを作成:
-  ```
-  fix(buffer): remove mode check from getVisualSelection
-
-  Remove mode check that was preventing :AiRewrite from working
-  in Visual mode. The mode check was causing false negatives
-  because Vim returns to Normal mode before the denops function
-  executes, even with denops#request().
-
-  Visual selection marks are still validated by isVisualSelectionValid(),
-  which is sufficient for determining if a selection exists.
-
-  Fixes the issue where :AiRewrite would show "No text selected"
-  error even when text was properly selected in Visual mode.
-  ```
+- [x] README.md に `AiEditOutput()` 関数の使用例を追加
+- [x] CHANGELOG.md に変更履歴を追加

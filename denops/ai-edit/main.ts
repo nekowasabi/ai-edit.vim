@@ -33,6 +33,13 @@ export async function main(denops: Denops): Promise<void> {
     async aiRewrite(...args: unknown[]): Promise<void> {
       await dispatcher.aiRewrite(denops, args as string[]);
     },
+
+    /**
+     * Execute AI output command - returns response without modifying buffer
+     */
+    async aiEditOutput(...args: unknown[]): Promise<string> {
+      return await dispatcher.aiEditOutput(denops, args as string[]);
+    },
   };
 
   // Define Vim commands
